@@ -1,0 +1,11 @@
+<library path="lib/libfphic">
+  
+  <class name="fphic_controllers/fphic" type="fphic_controllers::fphic" base_class_type="controller_interface::ControllerBase">
+    <description>
+      Info...
+    </description>
+  </class>
+
+
+
+</library>
