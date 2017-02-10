@@ -33,6 +33,7 @@ bool fphic::init(hardware_interface::EffortJointInterface *robot, ros::NodeHandl
 	// Kx_.resize(kdl_chain_.getNrOfJoints());
 	// Dx_.resize(kdl_chain_.getNrOfJoints());
 	M_.resize(kdl_chain_.getNrOfJoints());
+	
 	C_.resize(kdl_chain_.getNrOfJoints());
 	G_.resize(kdl_chain_.getNrOfJoints());
 
@@ -105,6 +106,7 @@ void fphic::starting(const ros::Time& time)
 	first_step_ = 0;
 	cmd_flag_ = 0;
 	step_ = 0;
+	fk_pos_solver_->JntToCart(joint_msr_states_.q, x_des_);
 
 
 }
@@ -112,6 +114,10 @@ void fphic::starting(const ros::Time& time)
 void fphic::update(const ros::Time& time, const ros::Duration& period)
 {
 
+	double k_x_param = 200.0, d_x_param = 0.0;
+
+	nh_.param<double>("kx", k_x_param, 200.0);
+	nh_.param<double>("dx", d_x_param, 0.0);
 
 
 	/* This function should be adapted to include the controller written in the paper*/
@@ -132,8 +138,8 @@ void fphic::update(const ros::Time& time, const ros::Duration& period)
 	msg_err_.data.clear();
 	msg_pose_.data.clear();
 
-	if (cmd_flag_)
-	{
+	// if (cmd_flag_)
+	// {
 		// resetting N and tau(t=0) for the highest priority task
 		N_trans_ = I_;
 		SetToZero(tau_);
@@ -169,19 +175,19 @@ void fphic::update(const ros::Time& time, const ros::Duration& period)
 		// computing forward kinematics
 		fk_pos_solver_->JntToCart(joint_msr_states_.q, x_);
 
-		if (Equal(x_, x_des_, 0.05))
-		{
-			ROS_INFO("On target");
-			cmd_flag_ = 0;
-			return;
-		}
+		// if (Equal(x_, x_des_, 0.05))
+		// {
+		// 	ROS_INFO("On target");
+		// 	cmd_flag_ = 0;
+		// 	return;
+		// }
 
 		// pushing x to the pose msg
 		for (int i = 0; i < 3; i++)
 			msg_pose_.data.push_back(x_.p(i));
 
 		// setting marker parameters
-		set_marker(x_, msg_id_);
+		// set_marker(x_, msg_id_);
 
 		// computing end-effector position/orientation error w.r.t. desired frame
 		x_err_ = diff(x_, x_des_);
@@ -189,9 +195,9 @@ void fphic::update(const ros::Time& time, const ros::Duration& period)
 		delta_x(0, 0) = x_err_(0);
 		delta_x(1, 0) = x_err_(1);
 		delta_x(2, 0) = x_err_(2);
-		delta_x(3, 0) = x_err_(3);
-		delta_x(4, 0) = x_err_(4);
-		delta_x(5, 0) = x_err_(5);
+		delta_x(3, 0) = x_err_(3)*0;
+		delta_x(4, 0) = x_err_(4)*0;
+		delta_x(5, 0) = x_err_(5)*0;
 
 		x_dot_ = J_.data * joint_msr_states_.qdot.data;
 
@@ -199,33 +205,35 @@ void fphic::update(const ros::Time& time, const ros::Duration& period)
 		for (int i = 0; i < e_ref_.size(); i++)
 		{
 			// e = x_des_dotdot + Kd*(x_des_dot - x_dot) + Kp*(x_des - x)
-			e_ref_(i) =  -Kd_(i) * (x_dot_(i)) + Kp_(i) * x_err_(i);
-			msg_err_.data.push_back(e_ref_(i));
+			// e_ref_(i) =  -Kd_(i) * (x_dot_(i)) + Kp_(i) * x_err_(i);
+			msg_err_.data.push_back(delta_x(i,0));
 		}
 
 		Eigen::Matrix<double, 7, 6> J_t = Eigen::Matrix<double, 7, 6>::Zero();
 		J_t = J_.data.transpose();
 
 		wrench_integral_ = wrench_last_ + ((wrench_last_ - wrench_end_effector_) * period.toSec());
-		tau_ic_ = -1 * J_t * (700 * Kx_ * delta_x + 0.3 * Dx_ * J_.data * qdot_m );//+ G_.data); //+ G_.data);
+		tau_ic_ = 1.0 * J_t * (k_x_param * Kx_ * delta_x - d_x_param * Dx_ * J_.data * qdot_m );//+ G_.data); //+ G_.data);
 		tau_fc_ = J_t * (100 * Kp_ * (wrench_end_effector_ - wrench_des_) + 100 * Ki_ * wrench_integral_);
-		tau_m_ = tau_ic_ + tau_fc_;
+		tau_m_ = tau_ic_ ;//+ tau_fc_;
 
 
-	}
+	// }
 
 	// std::cout << "wrench_end_effector_: " << std::endl;
 
 	for (int i = 0; i < 7; i++)
 	{
-		if (cmd_flag_)
-		{
+		// if (cmd_flag_)
+		// {
 			joint_handles_[i].setCommand(tau_m_(i, 0)); /*******/
 			// std::cout << wrench_end_effector_(i, 0) << " ";
-		}
-		else
-			joint_handles_[i].setCommand(0.0);
-		// std::cout << PIDs_[i].computeCommand(joint_des_states_.q(i) - joint_msr_states_.q(i),period) << std::endl;
+		// }
+		// else
+		// {
+			// joint_handles_[i].setCommand(0.0);
+			// joint_handles_[i].setCommand(PIDs_[i].computeCommand(joint_des_states_.q(i) - joint_msr_states_.q(i),period));
+		// }
 
 	}
 	// std::cout << std::endl;
