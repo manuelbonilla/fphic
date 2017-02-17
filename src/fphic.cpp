@@ -86,6 +86,9 @@ void fphic::WrenchCallback(const geometry_msgs::WrenchStamped::ConstPtr &wrenchs
 	// wrench_end_effector.request.body_name = wrenchstamped_msg->header.frame_id;
 	// wrench_end_effector.request.wrench = wrenchstamped_msg.wrench
 	ROS_DEBUG_STREAM("Getting force measurements");
+
+	if (wrench_end_effector_(0, 0) >= 0.5 || wrench_end_effector_(1, 0) >= 0.5 || wrench_end_effector_(2, 0) >= 0.5 || wrench_end_effector_(0, 0) <= -0.5 || wrench_end_effector_(1, 0) <= -0.5 || wrench_end_effector_(2, 0) <= -0.5)
+		cmd_flag_ = 1;
 }
 
 
@@ -114,10 +117,12 @@ void fphic::starting(const ros::Time& time)
 void fphic::update(const ros::Time& time, const ros::Duration& period)
 {
 
-	double k_x_param = 200.0, d_x_param = 0.0;
+	double k_x_param = 1000.0, d_x_param = 0.3, k_p_param = 100.0, k_i_param = 100.0;
 
-	nh_.param<double>("kx", k_x_param, 200.0);
-	nh_.param<double>("dx", d_x_param, 0.0);
+	nh_.param<double>("kx", k_x_param, 1000.0);
+	nh_.param<double>("dx", d_x_param, 0.3);
+	nh_.param<double>("kp", k_p_param, 100.0);
+	nh_.param<double>("ki", k_i_param, 100.0);
 
 
 	/* This function should be adapted to include the controller written in the paper*/
@@ -137,7 +142,6 @@ void fphic::update(const ros::Time& time, const ros::Duration& period)
 	// clearing msgs before publishing
 	msg_err_.data.clear();
 	msg_pose_.data.clear();
-
 	// if (cmd_flag_)
 	// {
 		// resetting N and tau(t=0) for the highest priority task
@@ -214,9 +218,11 @@ void fphic::update(const ros::Time& time, const ros::Duration& period)
 
 		wrench_integral_ = wrench_last_ + ((wrench_last_ - wrench_end_effector_) * period.toSec());
 		tau_ic_ = 1.0 * J_t * (k_x_param * Kx_ * delta_x - d_x_param * Dx_ * J_.data * qdot_m );//+ G_.data); //+ G_.data);
-		tau_fc_ = J_t * (100 * Kp_ * (wrench_end_effector_ - wrench_des_) + 100 * Ki_ * wrench_integral_);
-		tau_m_ = tau_ic_ ;//+ tau_fc_;
-
+		tau_fc_ = J_t * (k_p_param * Kp_ * (wrench_end_effector_ - wrench_des_) + k_i_param * Ki_ * wrench_integral_);
+		if (cmd_flag_)
+		tau_m_ = tau_ic_ + tau_fc_;
+		else
+		tau_m_ = tau_ic_;
 
 	// }
 
@@ -306,7 +312,7 @@ void fphic::command(const lwr_controllers::PoseRPY::ConstPtr &msg)
 	}
 
 	x_des_ = frame_des_;
-	cmd_flag_ = 1;
+	// cmd_flag_ = 1;
 }
 
 void fphic::set_marker(KDL::Frame x, int id)
