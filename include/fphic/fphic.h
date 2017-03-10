@@ -57,9 +57,12 @@ namespace fphic_controllers
 		Eigen::MatrixXd wrench_integral_ ;
   		Eigen::Matrix<double,6,1> wrench_last_;
 		Eigen::Matrix<double,6,1> wrench_end_effector_; 
+		Eigen::Matrix<double,6,1> wrench_end_effector_dummy; 
     	Eigen::Matrix<double,6,1> wrench_des_;
     	Eigen::Matrix<double,6,1> delta_x;
+    	Eigen::Matrix<double,6,1> force_error, force_error_0;
     	Eigen::Matrix<double,7,1> qdot_m;
+    	double f_tresh;
 		// KDL::Wrench wrench_des_;
 		// KDL::Wrench wrench_last_;
 		// KDL::Wrench wrench_integral_;
@@ -102,8 +105,9 @@ namespace fphic_controllers
     	Eigen::Matrix<double,6,6> Kp_ ;
     	Eigen::Matrix<double,6,6> Ki_ ;
     	Eigen::Matrix<double,6,6> Dx_ ;
-		
+		Eigen::Matrix<double,6,6> Adg_trans; //matrice aggiunta per la traslazione dei wrenches
 
+		
 		double phi_;	
 		double phi_last_;
 
@@ -114,6 +118,7 @@ namespace fphic_controllers
 		int ntasks_;
 		bool on_target_flag_;
 		int links_index_;
+		double f_des;
 
 
 		boost::scoped_ptr<KDL::ChainJntToJacSolver> jnt_to_jac_solver_;
