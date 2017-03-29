@@ -119,6 +119,7 @@ namespace fphic_controllers
 		bool on_target_flag_;
 		int links_index_;
 		double f_des;
+		double time_total;
 
 
 		boost::scoped_ptr<KDL::ChainJntToJacSolver> jnt_to_jac_solver_;

@@ -76,16 +76,16 @@ bool fphic::init(hardware_interface::EffortJointInterface *robot, ros::NodeHandl
 void fphic::WrenchCallback(const geometry_msgs::WrenchStamped::ConstPtr &wrenchstamped_msg)
 {
 	wrench_last_ = wrench_end_effector_;
-	wrench_end_effector_dummy(0, 0) = wrenchstamped_msg->wrench.force.x;
-	wrench_end_effector_dummy(1, 0) = wrenchstamped_msg->wrench.force.y;
-	wrench_end_effector_dummy(2, 0) = wrenchstamped_msg->wrench.force.z;
-	wrench_end_effector_dummy(3, 0) = wrenchstamped_msg->wrench.torque.x;
-	wrench_end_effector_dummy(4, 0) = wrenchstamped_msg->wrench.torque.y;
-	wrench_end_effector_dummy(5, 0) = wrenchstamped_msg->wrench.torque.z;
+	wrench_end_effector_dummy(0, 0) = -wrenchstamped_msg->wrench.force.z;
+	wrench_end_effector_dummy(1, 0) = wrenchstamped_msg->wrench.force.y*0.0;
+	wrench_end_effector_dummy(2, 0) = wrenchstamped_msg->wrench.force.z*0.0;
+	wrench_end_effector_dummy(3, 0) = wrenchstamped_msg->wrench.torque.x*0.0;
+	wrench_end_effector_dummy(4, 0) = wrenchstamped_msg->wrench.torque.y*0.0;
+	wrench_end_effector_dummy(5, 0) = wrenchstamped_msg->wrench.torque.z*0.0;
 
 	wrench_end_effector_ = Adg_trans * wrench_end_effector_dummy;
 	// ROS_INFO_STREAM("Updating force meassurements");
-	if ( std::abs(wrench_end_effector_(2, 0)) >= f_tresh)
+	if ( std::abs(wrench_end_effector_(0, 0)) >= f_tresh)
 	{
 		cmd_flag_ = 1;
 	}
@@ -117,16 +117,18 @@ void fphic::starting(const ros::Time& time)
 	step_ = 0;
 	fk_pos_solver_->JntToCart(joint_msr_states_.q, x_des_);
 
-	Adg_trans(4, 0) = 0.0875;
-	Adg_trans(3, 1) = -0.0875;
+	// Adg_trans(4, 0) = 0.0875;
+	// Adg_trans(3, 1) = -0.0875;
 
 
-	wrench_des_(0, 0) = 0.0;
+	wrench_des_(0, 0) = 3.0;
 	wrench_des_(1, 0) = 0.0;
-	wrench_des_(2, 0) = -3.0;
+	wrench_des_(2, 0) = 0.0;
 	wrench_des_(3, 0) = 0.0;
 	wrench_des_(4, 0) = 0.0;
 	wrench_des_(5, 0) = 0.0;
+
+	time_total = 0.0;
 
 
 
@@ -135,12 +137,12 @@ void fphic::starting(const ros::Time& time)
 void fphic::update(const ros::Time& time, const ros::Duration& period)
 {
 
-	double k_x_param = 5000.0, d_x_param = 0.3, k_p_param = 100.0, k_i_param = 100.0;
+	double k_x_param = 4200.0, d_x_param = 0.3, k_p_param = 1100.0, k_i_param = 1;
 
-	nh_.param<double>("kx", k_x_param, 5000.0);
+	nh_.param<double>("kx", k_x_param, 4200.0);
 	nh_.param<double>("dx", d_x_param, 0.3);
-	nh_.param<double>("kp", k_p_param, -10.0);
-	nh_.param<double>("ki", k_i_param, -1.0);
+	nh_.param<double>("kp", k_p_param, 1100.0);
+	nh_.param<double>("ki", k_i_param, 1);
 	nh_.param<double>("f_tresh", f_tresh,  100);
 
 
@@ -202,7 +204,14 @@ void fphic::update(const ros::Time& time, const ros::Duration& period)
 
 
 		// computing end-effector position/orientation error w.r.t. desired frame
-		x_err_ = diff(x_, x_des_);
+
+		KDL::Frame x_des_circle;
+		x_des_circle = x_des_;
+		x_des_circle.p(1) = x_des_.p(1) + 0.5*std::sin(2.0*M_PI*1/10*time_total);
+
+         // non va bene, non riesce a stabilizzarsi.
+
+		x_err_ = diff(x_, x_des_circle); 
 
 		delta_x(0, 0) = x_err_(0);
 		delta_x(1, 0) = x_err_(1);
@@ -265,6 +274,7 @@ void fphic::update(const ros::Time& time, const ros::Duration& period)
 		tau_msg.data.push_back(tau_m_(i, 0));
 	}
 	pub_tau_.publish(tau_msg);
+	time_total += period.toSec();
 	ros::spinOnce();
 
 }
